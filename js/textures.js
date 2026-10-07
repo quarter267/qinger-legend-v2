@@ -1,5 +1,6 @@
 // ==================== 纹理系统：程序化兜底 + CDN真实纹理异步替换 ====================
 const TextureGen = (() => {
+  // 程序化生成基础纹理（同步立即可用，保证首帧不白屏）
   function makeProcedural(type, size = 256) {
     const c = document.createElement('canvas');
     c.width = c.height = size;
@@ -24,6 +25,7 @@ const TextureGen = (() => {
       for (let x = 0; x < size; x++) {
         const i = (y * size + x) * 4;
         const noise = Math.random() * 2 - 1;
+        // 低频变化模拟斑块
         const patch = (Math.sin(x * 0.07) * Math.cos(y * 0.05) + Math.sin(x * 0.03 + y * 0.04)) * 0.5;
         data[i]     = Math.max(0, Math.min(255, p.base[0] + noise * p.var[0] + patch * p.var[0] * 0.5));
         data[i + 1] = Math.max(0, Math.min(255, p.base[1] + noise * p.var[1] + patch * p.var[1] * 0.4));
@@ -33,6 +35,7 @@ const TextureGen = (() => {
     }
     ctx.putImageData(img, 0, 0);
 
+    // 木纹：加竖线
     if (type === 'wood' || type === 'bark') {
       ctx.globalAlpha = 0.25;
       for (let x = 0; x < size; x += 3 + Math.random() * 5) {
@@ -57,6 +60,7 @@ const TextureGen = (() => {
     return tex;
   }
 
+  // 同步获取所有纹理（程序化兜底）
   function getAll() {
     return {
       grass: makeProcedural('grass'),
@@ -70,6 +74,7 @@ const TextureGen = (() => {
     };
   }
 
+  // CDN 纹理 URL（Poly Haven CC0，自托管CDN镜像）
   const CDN_URLS = {
     grass: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_ground/grass_ground_diff_1k.jpg',
     rock: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_rock/dark_rock_diff_1k.jpg',
@@ -77,9 +82,10 @@ const TextureGen = (() => {
     sand: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/coast_sand_01/coast_sand_01_diff_1k.jpg',
     bark: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_01/bark_brown_01_diff_1k.jpg',
     leaves: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_leaves_03/forest_leaves_03_diff_1k.jpg',
-    wood: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_plank_01/wood_plank_01_diff_1k.jpg',
+    wood: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_plank_wall/wood_plank_wall_diff_1k.jpg',
   };
 
+  // 异步加载CDN纹理，加载完成后替换原贴图
   function loadCDNTextures(textures, onProgress) {
     const keys = Object.keys(CDN_URLS);
     let loaded = 0;
@@ -105,11 +111,15 @@ const TextureGen = (() => {
         },
         undefined,
         () => {
+          // 失败了就保留程序化纹理
           loaded++;
           if (onProgress) onProgress(loaded / keys.length);
         }
       );
     });
+
+    // 标记材质需要更新（由于我们直接替换texture引用，使用map的材质需要手动标记）
+    // 由调用方负责
   }
 
   return { getAll, loadCDNTextures, makeProcedural };
